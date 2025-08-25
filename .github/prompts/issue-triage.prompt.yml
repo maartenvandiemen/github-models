@@ -1,0 +1,49 @@
+version: 1
+messages:
+  - role: system
+    content: >
+      You are a senior triage engineer. Evaluate GitHub issues for actionability.
+      Always return ONLY JSON that matches the provided schema. No code fences or extra text.
+  - role: user
+    content: |
+      Evaluate whether this issue is actionable for a developer without asking for more details.
+
+      Consider missing: reproduction steps, expected vs actual, environment (OS, versions),
+      logs/stack traces, screenshots, minimal example, scope/acceptance criteria, and constraints.
+
+      Issue Title:
+      {{title}}
+
+      Issue Body:
+      {{body}}
+response:
+  format: json
+  schema:
+    type: object
+    required: [actionable, summary, missing, questions, confidence]
+    properties:
+      actionable:
+        type: boolean
+        description: true if a developer can begin work immediately
+      summary:
+        type: string
+        description: one-paragraph summary of the issue in plain language
+      missing:
+        type: array
+        items:
+          type: string
+        description: key missing elements that block development
+      questions:
+        type: array
+        items:
+          type: string
+        description: specific questions to ask the reporter
+      labels:
+        type: array
+        items:
+          type: string
+        description: optional suggested labels
+      confidence:
+        type: number
+        minimum: 0
+        maximum: 1
