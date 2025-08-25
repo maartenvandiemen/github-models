@@ -80,7 +80,13 @@ jobs:
           ai_compact="$(jq -c . ai.json)"
 
           echo "ai=$ai_compact" >> "$GITHUB_OUTPUT"
-
+      - name: Debug parsed AI output
+        if: always()
+        run: |
+          echo "${{ steps.parse.outputs.ai }}"
+          echo "::group::AI JSON (pretty)"
+          jq . <<< '${{ steps.parse.outputs.ai }}'
+          echo "::endgroup::"
       - name: Sync labels
         if: success()
         env:
