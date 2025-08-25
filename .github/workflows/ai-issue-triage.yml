@@ -31,10 +31,8 @@ jobs:
         id: prep
         shell: bash
         run: |
-          # Safely extract title/body from the event JSON
           title=$(jq -r '.issue.title // ""' "$GITHUB_EVENT_PATH")
-          printf "title<<EOF\n%s\nEOF\n" "$title" >> "$GITHUB_OUTPUT"
-
+          printf "title=%s\n" "$title" >> "$GITHUB_OUTPUT"
           jq -r '.issue.body // ""' "$GITHUB_EVENT_PATH" > issue_body.txt
 
       - name: Run AI inference with prompt file
@@ -43,12 +41,10 @@ jobs:
         with:
           model: ${{ env.MODEL }}
           prompt-file: .github/prompts/issue-triage.prompt.yml
-          # Provide structured variables for {{title}} and file content for {{body}}
           input: |
             title: ${{ steps.prep.outputs.title }}
           file_input: |
             body: issue_body.txt
-          # Optional: cap output size
           max-tokens: 1000
 
       - name: Save and validate AI JSON
@@ -67,9 +63,8 @@ jobs:
             exit 1
           fi
 
-          echo "ai<<EOF" >> "$GITHUB_OUTPUT"
-          cat ai.json >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          ai_compact=$(jq -c . ai.json)
+          echo "ai=$ai_compact" >> "$GITHUB_OUTPUT"
 
       - name: Sync labels
         if: success()
