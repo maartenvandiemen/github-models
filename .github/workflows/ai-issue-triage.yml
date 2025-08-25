@@ -24,8 +24,7 @@ jobs:
       group: issue-ai-triage-${{ github.event.issue.number }}
       cancel-in-progress: true
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Prepare inputs
         id: prep
@@ -56,13 +55,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Prefer the action's 'content' output; fall back to parsing the raw response
           content="${AI_CONTENT:-}"
           if [ -z "$content" ] || [ "$content" = "null" ]; then
             content="$(jq -r '.choices[0].message.content // empty' <<< "${AI_RESPONSE:-}" || echo "")"
           fi
 
-          # If still empty, emit a safe default that matches our schema so downstream steps work
           if [ -z "$content" ]; then
             content='{
               "actionable": false,
@@ -74,19 +71,10 @@ jobs:
             }'
           fi
 
-          # Validate and compact to a single line for $GITHUB_OUTPUT
           printf "%s" "$content" > ai.json
           jq . ai.json >/dev/null
-          ai_compact="$(jq -c . ai.json)"
+          echo "ai=$(jq -c . ai.json)" >> "$GITHUB_OUTPUT"
 
-          echo "ai=$ai_compact" >> "$GITHUB_OUTPUT"
-      - name: Debug parsed AI output
-        if: always()
-        run: |
-          echo "${{ steps.parse.outputs.ai }}"
-          echo "::group::AI JSON (pretty)"
-          jq . <<< '${{ steps.parse.outputs.ai }}'
-          echo "::endgroup::"
       - name: Sync labels
         if: success()
         env:
@@ -95,7 +83,6 @@ jobs:
         shell: bash
         run: |
           number=${{ github.event.issue.number }}
-
           if [ -z "${AI:-}" ] || [ "${AI}" = "null" ]; then
             echo "AI output missing; adding ${NEEDS_INFO_LABEL}/${AI_LABEL}."
             gh issue edit "$number" --add-label "${NEEDS_INFO_LABEL}" || true
