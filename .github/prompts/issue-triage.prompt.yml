@@ -1,7 +1,7 @@
 version: 1
 messages:
   - role: system
-    content: >
+    content: |
       You are a senior triage engineer. Evaluate GitHub issues for actionability.
       Always return ONLY JSON that matches the provided schema. No code fences or extra text.
   - role: user
@@ -24,25 +24,17 @@ response:
     properties:
       actionable:
         type: boolean
-        description: true if a developer can begin work immediately
       summary:
         type: string
-        description: one-paragraph summary of the issue in plain language
       missing:
         type: array
-        items:
-          type: string
-        description: key missing elements that block development
+        items: { type: string }
       questions:
         type: array
-        items:
-          type: string
-        description: specific questions to ask the reporter
+        items: { type: string }
       labels:
         type: array
-        items:
-          type: string
-        description: optional suggested labels
+        items: { type: string }
       confidence:
         type: number
         minimum: 0
