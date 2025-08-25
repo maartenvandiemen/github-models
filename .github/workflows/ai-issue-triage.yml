@@ -24,16 +24,32 @@ jobs:
       group: issue-ai-triage-${{ github.event.issue.number }}
       cancel-in-progress: true
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare inputs
+        id: prep
+        shell: bash
+        run: |
+          # Safely extract title/body from the event JSON
+          title=$(jq -r '.issue.title // ""' "$GITHUB_EVENT_PATH")
+          printf "title<<EOF\n%s\nEOF\n" "$title" >> "$GITHUB_OUTPUT"
+
+          jq -r '.issue.body // ""' "$GITHUB_EVENT_PATH" > issue_body.txt
+
       - name: Run AI inference with prompt file
         id: ai
         uses: actions/ai-inference@v1
         with:
           model: ${{ env.MODEL }}
-          temperature: 0.2
-          prompt: .github/prompts/issue-triage.prompt.yml
+          prompt-file: .github/prompts/issue-triage.prompt.yml
+          # Provide structured variables for {{title}} and file content for {{body}}
           input: |
-            title: ${{ github.event.issue.title }}
-            body: ${{ github.event.issue.body || '' }}
+            title: ${{ steps.prep.outputs.title }}
+          file_input: |
+            body: issue_body.txt
+          # Optional: cap output size
+          max-tokens: 1000
 
       - name: Save and validate AI JSON
         id: parse
