@@ -49,21 +49,36 @@ jobs:
 
       - name: Save and validate AI JSON
         id: parse
+        env:
+          AI_CONTENT: ${{ steps.ai.outputs.content }}
+          AI_RESPONSE: ${{ steps.ai.outputs.response }}
         shell: bash
         run: |
-          content='${{ steps.ai.outputs.content }}'
+          set -euo pipefail
+
+          # Prefer the action's 'content' output; fall back to parsing the raw response
+          content="${AI_CONTENT:-}"
           if [ -z "$content" ] || [ "$content" = "null" ]; then
-            content=$(jq -r '.choices[0].message.content' <<< '${{ steps.ai.outputs.response || '' }}' 2>/dev/null || echo "")
+            content="$(jq -r '.choices[0].message.content // empty' <<< "${AI_RESPONSE:-}" || echo "")"
           fi
 
+          # If still empty, emit a safe default that matches our schema so downstream steps work
+          if [ -z "$content" ]; then
+            content='{
+              "actionable": false,
+              "summary": "AI triage could not parse a valid response.",
+              "missing": ["reproduction steps", "expected vs actual", "environment details"],
+              "questions": ["Please provide the missing details listed above."],
+              "labels": ["needs-more-info"],
+              "confidence": 0
+            }'
+          fi
+
+          # Validate and compact to a single line for $GITHUB_OUTPUT
           printf "%s" "$content" > ai.json
-          if ! jq . ai.json >/dev/null 2>&1; then
-            echo "Model did not return valid JSON:"
-            cat ai.json
-            exit 1
-          fi
+          jq . ai.json >/dev/null
+          ai_compact="$(jq -c . ai.json)"
 
-          ai_compact=$(jq -c . ai.json)
           echo "ai=$ai_compact" >> "$GITHUB_OUTPUT"
 
       - name: Sync labels
@@ -74,7 +89,15 @@ jobs:
         shell: bash
         run: |
           number=${{ github.event.issue.number }}
-          actionable=$(jq -r '.actionable' <<< "$AI")
+
+          if [ -z "${AI:-}" ] || [ "${AI}" = "null" ]; then
+            echo "AI output missing; adding ${NEEDS_INFO_LABEL}/${AI_LABEL}."
+            gh issue edit "$number" --add-label "${NEEDS_INFO_LABEL}" || true
+            gh issue edit "$number" --add-label "${AI_LABEL}" || true
+            exit 0
+          fi
+
+          actionable=$(jq -r '.actionable // false' <<< "$AI")
 
           declare -a add_labels=()
           if [ "$actionable" = "true" ]; then
