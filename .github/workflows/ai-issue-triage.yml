@@ -10,7 +10,7 @@ permissions:
   models: read
 
 env:
-  MODEL: openai/gpt-4o-mini
+  MODEL: gpt-4o-mini
   READY_LABEL: ready-for-dev
   TRIAGED_LABEL: triaged
   NEEDS_INFO_LABEL: needs-more-info
@@ -36,17 +36,69 @@ jobs:
           printf "title=%s\n" "$title" >> "$GITHUB_OUTPUT"
           jq -r '.issue.body // ""' "$GITHUB_EVENT_PATH" > issue_body.txt
 
-      - name: Run AI inference with prompt file
+      - name: Run AI inference with GitHub Models
         id: ai
-        uses: actions/ai-inference@v1
-        with:
-          model: ${{ env.MODEL }}
-          prompt-file: .github/prompts/issue-triage.prompt.yml
-          input: |
-            title: ${{ steps.prep.outputs.title }}
-          file_input: |
-            body: issue_body.txt
-          max-tokens: 1000
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_TITLE: ${{ steps.prep.outputs.title }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Read the issue body
+          issue_body=$(cat issue_body.txt)
+
+          # Prepare the prompt based on the prompt file structure
+          system_prompt="You are a senior triage engineer. Evaluate GitHub issues for actionability.
+          Always return ONLY JSON that matches the provided schema. No code fences or extra text.
+          Return a single-line, minified JSON object with no surrounding Markdown fences or prose."
+
+          user_prompt="Evaluate whether this issue is actionable for a developer without asking for more details.
+
+          Consider missing: reproduction steps, expected vs actual, environment (OS, versions),
+          logs/stack traces, screenshots, minimal example, scope/acceptance criteria, and constraints.
+
+          Issue Title:
+          ${ISSUE_TITLE}
+
+          Issue Body:
+          ${issue_body}"
+
+          # Create prompt file for gh api
+          cat > prompt.json << EOF
+          {
+            "model": "$MODEL",
+            "messages": [
+              {"role": "system", "content": $(echo "$system_prompt" | jq -Rs .)},
+              {"role": "user", "content": $(echo "$user_prompt" | jq -Rs .)}
+            ],
+            "max_tokens": 1000,
+            "temperature": 0.1
+          }
+          EOF
+
+          # Call GitHub Models API using gh cli
+          response=$(gh api \
+            --method POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            /models/chat/completions \
+            --input prompt.json) || {
+            echo "AI API call failed, using fallback"
+            response='{"choices": [{"message": {"content": ""}}]}'
+          }
+
+          # Extract content from response
+          content=$(echo "$response" | \
+            jq -r '.choices[0].message.content // empty')
+
+          # Set outputs for the parsing step
+          echo "AI_CONTENT=$content" >> "$GITHUB_ENV"
+          echo "AI_RESPONSE=$response" >> "$GITHUB_ENV"
+
+          # Also set as step outputs for backward compatibility
+          echo "content=$content" >> "$GITHUB_OUTPUT"
+          echo "response=$response" >> "$GITHUB_OUTPUT"
 
       - name: Parse AI JSON
         id: parse
@@ -101,7 +153,8 @@ jobs:
           if [ "$actionable" = "true" ]; then
             gh issue edit "$number" --remove-label "${NEEDS_INFO_LABEL}" || true
             # Comment concise summary
-            gh issue comment "$number" --body "$(printf "AI triage summary: %s\n\nLabeling as %s." "$summary" "${READY_LABEL}")"
+            summary_msg="AI triage summary: ${summary}\n\nLabeling as ${READY_LABEL}."
+            gh issue comment "$number" --body "$(printf "$summary_msg")"
           else
             gh issue edit "$number" --remove-label "${READY_LABEL}" || true
             # Comment with missing info and questions
@@ -128,7 +181,8 @@ jobs:
                 done
                 echo
               fi
-              echo "Once you've updated the issue, reply here and the bot will re-check. To bypass, a maintainer can add the \"${READY_LABEL}\" label."
+              echo "Once you've updated the issue, reply here and the bot will re-check."
+              echo "To bypass, a maintainer can add the \"${READY_LABEL}\" label."
             } > comment.md
 
             gh issue comment "$number" -F comment.md
