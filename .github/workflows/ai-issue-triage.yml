@@ -23,6 +23,7 @@ jobs:
     concurrency:
       group: issue-ai-triage-${{ github.event.issue.number }}
       cancel-in-progress: true
+
     steps:
       - uses: actions/checkout@v4
 
@@ -30,6 +31,7 @@ jobs:
         id: prep
         shell: bash
         run: |
+          set -euo pipefail
           title=$(jq -r '.issue.title // ""' "$GITHUB_EVENT_PATH")
           printf "title=%s\n" "$title" >> "$GITHUB_OUTPUT"
           jq -r '.issue.body // ""' "$GITHUB_EVENT_PATH" > issue_body.txt
@@ -46,7 +48,7 @@ jobs:
             body: issue_body.txt
           max-tokens: 1000
 
-      - name: Save and validate AI JSON
+      - name: Parse AI JSON
         id: parse
         env:
           AI_CONTENT: ${{ steps.ai.outputs.content }}
@@ -54,35 +56,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          bash .github/scripts/parse-ai-json.sh
 
-          content="${AI_CONTENT:-}"
-          if [ -z "$content" ] || [ "$content" = "null" ]; then
-            content="$(jq -r '.choices[0].message.content // empty' <<< "${AI_RESPONSE:-}" || echo "")"
-          fi
-
-          if [ -z "$content" ]; then
-            content='{
-              "actionable": false,
-              "summary": "AI triage could not parse a valid response.",
-              "missing": ["reproduction steps", "expected vs actual", "environment details"],
-              "questions": ["Please provide the missing details listed above."],
-              "labels": ["needs-more-info"],
-              "confidence": 0
-            }'
-          fi
-
-          printf "%s" "$content" > ai.json
-          jq . ai.json >/dev/null
-          echo "ai=$(jq -c . ai.json)" >> "$GITHUB_OUTPUT"
-
-      - name: Sync labels
+      - name: Apply triage outcome (labels + comment)
         if: success()
         env:
           AI: ${{ steps.parse.outputs.ai }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
+          set -euo pipefail
           number=${{ github.event.issue.number }}
+
           if [ -z "${AI:-}" ] || [ "${AI}" = "null" ]; then
             echo "AI output missing; adding ${NEEDS_INFO_LABEL}/${AI_LABEL}."
             gh issue edit "$number" --add-label "${NEEDS_INFO_LABEL}" || true
@@ -91,7 +76,9 @@ jobs:
           fi
 
           actionable=$(jq -r '.actionable // false' <<< "$AI")
+          summary=$(jq -r '.summary // ""' <<< "$AI")
 
+          # Base labels depending on actionability
           declare -a add_labels=()
           if [ "$actionable" = "true" ]; then
             add_labels+=("${READY_LABEL}" "${TRIAGED_LABEL}")
@@ -99,65 +86,50 @@ jobs:
             add_labels+=("${NEEDS_INFO_LABEL}" "${AI_LABEL}")
           fi
 
+          # Any suggested labels from AI
           mapfile -t suggested < <(jq -r '.labels // [] | .[]' <<< "$AI")
           for l in "${suggested[@]}"; do
             [ -n "$l" ] && add_labels+=("$l")
           done
 
+          # Add labels
           for l in "${add_labels[@]}"; do
             gh issue edit "$number" --add-label "$l" || true
           done
 
+          # Remove mutually exclusive label
           if [ "$actionable" = "true" ]; then
             gh issue edit "$number" --remove-label "${NEEDS_INFO_LABEL}" || true
+            # Comment concise summary
+            gh issue comment "$number" --body "$(printf "AI triage summary: %s\n\nLabeling as %s." "$summary" "${READY_LABEL}")"
           else
             gh issue edit "$number" --remove-label "${READY_LABEL}" || true
+            # Comment with missing info and questions
+            mapfile -t missing < <(jq -r '.missing[]?' <<< "$AI")
+            mapfile -t questions < <(jq -r '.questions[]?' <<< "$AI")
+
+            {
+              echo "Thanks for opening this issue! I ran an automated triage to help our maintainers."
+              echo
+              echo "Summary:"
+              echo "$summary"
+              echo
+              if [ "${#missing[@]}" -gt 0 ]; then
+                echo "To help a developer pick this up, please provide:"
+                for m in "${missing[@]}"; do
+                  echo "- $m"
+                done
+                echo
+              fi
+              if [ "${#questions[@]}" -gt 0 ]; then
+                echo "Follow-up questions:"
+                for q in "${questions[@]}"; do
+                  echo "- $q"
+                done
+                echo
+              fi
+              echo "Once you've updated the issue, reply here and the bot will re-check. To bypass, a maintainer can add the \"${READY_LABEL}\" label."
+            } > comment.md
+
+            gh issue comment "$number" -F comment.md
           fi
-
-      - name: Comment with questions when not actionable
-        if: success() && fromJson(steps.parse.outputs.ai).actionable == false
-        env:
-          AI: ${{ steps.parse.outputs.ai }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          number=${{ github.event.issue.number }}
-          summary=$(jq -r '.summary' <<< "$AI")
-          mapfile -t missing < <(jq -r '.missing[]?' <<< "$AI")
-          mapfile -t questions < <(jq -r '.questions[]?' <<< "$AI")
-
-          {
-            echo "Thanks for opening this issue! I ran an automated triage to help our maintainers."
-            echo
-            echo "Summary:"
-            echo "$summary"
-            echo
-            if [ "${#missing[@]}" -gt 0 ]; then
-              echo "To help a developer pick this up, please provide:"
-              for m in "${missing[@]}"; do
-                echo "- $m"
-              done
-              echo
-            fi
-            if [ "${#questions[@]}" -gt 0 ]; then
-              echo "Follow-up questions:"
-              for q in "${questions[@]}"; do
-                echo "- $q"
-              done
-              echo
-            fi
-            echo "Once you've updated the issue, reply here and the bot will re-check. To bypass, a maintainer can add the \"${{ env.READY_LABEL }}\" label."
-          } > comment.md
-
-          gh issue comment "$number" -F comment.md
-
-      - name: Confirm ready-for-dev
-        if: success() && fromJson(steps.parse.outputs.ai).actionable == true
-        env:
-          AI: ${{ steps.parse.outputs.ai }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          number=${{ github.event.issue.number }}
-          summary=$(jq -r '.summary' <<< "$AI")
-          gh issue comment "$number" --body "$(printf "AI triage summary: %s\n\nLabeling as %s." "$summary" "${{ env.READY_LABEL }}")"
