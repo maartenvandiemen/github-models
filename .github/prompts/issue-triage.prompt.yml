@@ -4,6 +4,7 @@ messages:
     content: |
       You are a senior triage engineer. Evaluate GitHub issues for actionability.
       Always return ONLY JSON that matches the provided schema. No code fences or extra text.
+      Return a single-line, minified JSON object with no surrounding Markdown fences or prose.
   - role: user
     content: |
       Evaluate whether this issue is actionable for a developer without asking for more details.
