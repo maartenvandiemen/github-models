@@ -19,34 +19,32 @@ messages:
 responseFormat: json_schema
 jsonSchema: |-
   {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "Response",
-    "type": "object",
-    "properties": {
-      "actionable": {
-        "type": "boolean"
+    "name": "response",
+    "strict": true,
+    "schema": {
+      "type": "object",
+      "properties": {
+        "actionable": { "type": "boolean" },
+        "summary": { "type": "string" },
+        "missing": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "questions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
       },
-      "summary": {
-        "type": "string"
-      },
-      "missing": {
-        "type": "array",
-        "items": { "type": "string" }
-      },
-      "questions": {
-        "type": "array",
-        "items": { "type": "string" }
-      },
-      "labels": {
-        "type": "array",
-        "items": { "type": "string" }
-      },
-      "confidence": {
-        "type": "number",
-        "minimum": 0,
-        "maximum": 1
-      }
-    },
-    "required": ["actionable", "summary", "missing", "questions", "confidence"],
-    "additionalProperties": false
+      "required": ["actionable", "summary", "missing", "questions", "confidence"],
+      "additionalProperties": false
+    }
   }
