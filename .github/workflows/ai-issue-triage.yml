@@ -50,76 +50,126 @@ jobs:
 
       - name: Apply triage outcome (labels + comment)
         if: success()
+        uses: actions/github-script@v7
         env:
-          AI: ${{ steps.parse.outputs.ai }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          number=${{ github.event.issue.number }}
+          AI: ${{ steps.ai.outputs.response }}
+          READY_LABEL: ${{ env.READY_LABEL }}
+          TRIAGED_LABEL: ${{ env.TRIAGED_LABEL }}
+          NEEDS_INFO_LABEL: ${{ env.NEEDS_INFO_LABEL }}
+          AI_LABEL: ${{ env.AI_LABEL }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.payload.issue.number;
 
-          if [ -z "${AI:-}" ] || [ "${AI}" = "null" ]; then
-            echo "AI output missing; adding ${NEEDS_INFO_LABEL}/${AI_LABEL}."
-            gh issue edit "$number" --add-label "${NEEDS_INFO_LABEL}" || true
-            gh issue edit "$number" --add-label "${AI_LABEL}" || true
-            exit 0
-          fi
+            const READY_LABEL = process.env.READY_LABEL;
+            const TRIAGED_LABEL = process.env.TRIAGED_LABEL;
+            const NEEDS_INFO_LABEL = process.env.NEEDS_INFO_LABEL;
+            const AI_SYS_LABEL = process.env.AI_LABEL;
 
-          actionable=$(jq -r '.actionable // false' <<< "$AI")
-          summary=$(jq -r '.summary // ""' <<< "$AI")
+            async function addLabels(labels) {
+              const list = Array.from(new Set((labels || []).filter(l => typeof l === 'string' && l.trim() !== '')));
+              if (!list.length) return;
+              try {
+                await github.rest.issues.addLabels({
+                  owner, repo, issue_number,
+                  labels: list
+                });
+              } catch (e) {
+                core.warning(`Failed to add labels ${JSON.stringify(list)}: ${e.message}`);
+              }
+            }
 
-          # Base labels depending on actionability
-          declare -a add_labels=()
-          if [ "$actionable" = "true" ]; then
-            add_labels+=("${READY_LABEL}" "${TRIAGED_LABEL}")
-          else
-            add_labels+=("${NEEDS_INFO_LABEL}" "${AI_LABEL}")
-          fi
+            async function removeLabel(name) {
+              if (!name) return;
+              try {
+                await github.rest.issues.removeLabel({
+                  owner, repo, issue_number,
+                  name
+                });
+              } catch (e) {
+                if (e.status !== 404) {
+                  core.warning(`Failed to remove label ${name}: ${e.message}`);
+                }
+              }
+            }
 
-          # Any suggested labels from AI
-          mapfile -t suggested < <(jq -r '.labels // [] | .[]' <<< "$AI")
-          for l in "${suggested[@]}"; do
-            [ -n "$l" ] && add_labels+=("$l")
-          done
+            async function comment(body) {
+              if (!body) return;
+              await github.rest.issues.createComment({
+                owner, repo, issue_number,
+                body
+              });
+            }
 
-          # Add labels
-          for l in "${add_labels[@]}"; do
-            gh issue edit "$number" --add-label "$l" || true
-          done
+            const aiRaw = process.env.AI;
+            if (!aiRaw || aiRaw.trim() === '' || aiRaw === 'null') {
+              // Empty response: add needs info + AI label
+              await addLabels([NEEDS_INFO_LABEL, AI_SYS_LABEL]);
+              return;
+            }
 
-          # Remove mutually exclusive label
-          if [ "$actionable" = "true" ]; then
-            gh issue edit "$number" --remove-label "${NEEDS_INFO_LABEL}" || true
-            # Comment concise summary
-            gh issue comment "$number" --body "$(printf "AI triage summary: %s\n\nLabeling as %s." "$summary" "${READY_LABEL}")"
-          else
-            gh issue edit "$number" --remove-label "${READY_LABEL}" || true
-            # Comment with missing info and questions
-            mapfile -t missing < <(jq -r '.missing[]?' <<< "$AI")
-            mapfile -t questions < <(jq -r '.questions[]?' <<< "$AI")
+            let ai;
+            try {
+              ai = JSON.parse(aiRaw);
+            } catch {
+              // Parsing failed: treat as empty
+              await addLabels([NEEDS_INFO_LABEL, AI_SYS_LABEL]);
+              return;
+            }
 
-            {
-              echo "Thanks for opening this issue! I ran an automated triage to help our maintainers."
-              echo
-              echo "Summary:"
-              echo "$summary"
-              echo
-              if [ "${#missing[@]}" -gt 0 ]; then
-                echo "To help a developer pick this up, please provide:"
-                for m in "${missing[@]}"; do
-                  echo "- $m"
-                done
-                echo
-              fi
-              if [ "${#questions[@]}" -gt 0 ]; then
-                echo "Follow-up questions:"
-                for q in "${questions[@]}"; do
-                  echo "- $q"
-                done
-                echo
-              fi
-              echo "Once you've updated the issue, reply here and the bot will re-check. To bypass, a maintainer can add the \"${READY_LABEL}\" label."
-            } > comment.md
+            const actionable = !!ai?.actionable;
+            const summary = (ai?.summary ?? '').toString();
 
-            gh issue comment "$number" -F comment.md
-          fi
+            // Base labels depending on actionability
+            const labelsToAdd = [];
+            if (actionable) {
+              labelsToAdd.push(READY_LABEL, TRIAGED_LABEL);
+            } else {
+              labelsToAdd.push(NEEDS_INFO_LABEL, AI_SYS_LABEL);
+            }
+
+            // Any suggested labels from AI
+            if (Array.isArray(ai?.labels)) {
+              for (const l of ai.labels) {
+                if (typeof l === 'string' && l.trim() !== '') labelsToAdd.push(l);
+              }
+            }
+
+            // Apply label additions
+            await addLabels(labelsToAdd);
+
+            if (actionable) {
+              // Remove mutually exclusive label
+              await removeLabel(NEEDS_INFO_LABEL);
+
+              // Comment concise summary
+              const body = `AI triage summary: ${summary}\n\nLabeling as: ${READY_LABEL}.`;
+              await comment(body);
+            } else {
+              // Remove mutually exclusive label
+              await removeLabel(READY_LABEL);
+
+              const missing = Array.isArray(ai?.missing) ? ai.missing : [];
+              const questions = Array.isArray(ai?.questions) ? ai.questions : [];
+
+              let body = "Thanks for opening this issue! I ran an automated triage to help our maintainers.\n\n";
+              if (summary) {
+                body += "Summary:\n" + summary + "\n\n";
+              }
+              if (missing.length > 0) {
+                body += "To help a developer pick this up, please provide:\n";
+                for (const m of missing) body += `- ${m}\n`;
+                body += "\n";
+              }
+              if (questions.length > 0) {
+                body += "Follow-up questions:\n";
+                for (const q of questions) body += `- ${q}\n`;
+                body += "\n";
+              }
+              body += `Once you've updated the issue, reply here and the bot will re-check. To bypass, a maintainer can add the "${READY_LABEL}" label.`;
+
+              await comment(body);
+            }
