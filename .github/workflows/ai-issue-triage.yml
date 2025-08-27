@@ -47,23 +47,6 @@ jobs:
           file_input: |
             body: issue_body.txt
           max-tokens: 1000
-  
-  
-      - name: Echo output content
-        run: echo ${{ steps.ai.outputs.content }}
-
-      - name: Echo output response
-        run: echo ${{ steps.ai.outputs.response }}
-
-      - name: Parse AI JSON
-        id: parse
-        env:
-          AI_CONTENT: ${{ steps.ai.outputs.content }}
-          AI_RESPONSE: ${{ steps.ai.outputs.response }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash .github/scripts/parse-ai-json.sh
 
       - name: Apply triage outcome (labels + comment)
         if: success()
