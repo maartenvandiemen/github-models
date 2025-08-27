@@ -44,7 +44,7 @@ jsonSchema: |-
           "maximum": 1
         }
       },
-      "required": ["actionable", "summary", "missing", "questions", "confidence"],
+      "required": ["actionable", "summary", "missing", "questions", "labels", "confidence"],
       "additionalProperties": false
     }
   }
