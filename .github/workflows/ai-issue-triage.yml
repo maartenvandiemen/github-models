@@ -47,6 +47,13 @@ jobs:
           file_input: |
             body: issue_body.txt
           max-tokens: 1000
+  
+  
+      - name: Echo output content
+        run: echo ${{ steps.ai.outputs.content }}
+
+      - name: Echo output response
+        run: echo ${{ steps.ai.outputs.response }}
 
       - name: Parse AI JSON
         id: parse
