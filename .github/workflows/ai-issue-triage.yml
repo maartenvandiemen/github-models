@@ -34,30 +34,42 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-      
+
+            // Helper to indent all lines
+            function indentMultiline(text, spaces = 2) {
+              const prefix = ' '.repeat(spaces);
+              return (text || '')
+                .split('\n')
+                .map(line => prefix + line)
+                .join('\n');
+            }
+            
             const { owner, repo } = context.repo;
             const issue = context.payload.issue;
             const issue_number = issue.number;
-      
+            
             // Title/output
             core.setOutput('title', issue.title || '');
-      
+            
             // Issue body file
-            fs.writeFileSync('issue_body.txt', issue.body || '', 'utf8');
-      
+            const bodyIndented = indentMultiline(issue.body || '');
+            fs.writeFileSync('issue_body.txt', bodyIndented, 'utf8');
+            
             // Fetch all comments (paginate) and exclude bots to avoid loops/noise
             const comments = await github.paginate(
               github.rest.issues.listComments,
               { owner, repo, issue_number, per_page: 100 }
             );
-      
+            
             const formatted = comments
               .filter(c => c.user?.type !== 'Bot' && c.user?.login !== 'github-actions[bot]')
               .map(c => `----\n@${c.user.login} (${c.created_at})\n\n${c.body ?? ''}`)
               .join('\n');
-      
-            const commentsContent = formatted.trim().length === 0 ? 'No comments.' : formatted.trimEnd();
-            fs.writeFileSync('issue_comments.txt', commentsContent, 'utf8');
+            
+            const commentsIndented = formatted.trim().length === 0
+              ? indentMultiline('No comments.')
+              : indentMultiline(formatted.trim());
+              fs.writeFileSync('issue_comments.txt', commentsIndented, 'utf8');
 
       - name: Run AI inference with prompt file
         id: ai
