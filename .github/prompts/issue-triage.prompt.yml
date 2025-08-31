@@ -18,7 +18,7 @@ messages:
       Issue Body:
       {{body}}
 
-      Issue Comments
+      Issue Comments:
       {{comments}}
 responseFormat: json_schema
 jsonSchema: |-
