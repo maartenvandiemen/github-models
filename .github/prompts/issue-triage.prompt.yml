@@ -8,9 +8,8 @@ messages:
     content: |
       Evaluate whether this issue is actionable for a developer without asking for more details.
 
-      Consider missing: reproduction steps, expected vs actual, environment (OS, versions),
-      logs/stack traces, screenshots, minimal example, scope/acceptance criteria, and constraints.
-
+      Consider missing: reproduction steps, expected vs actual, environment where the issue occurs.
+      
       Issue Title:
       {{title}}
 
