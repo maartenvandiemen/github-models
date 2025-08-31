@@ -56,7 +56,8 @@ jobs:
               .map(c => `----\n@${c.user.login} (${c.created_at})\n\n${c.body ?? ''}`)
               .join('\n');
       
-            fs.writeFileSync('issue_comments.txt', formatted, 'utf8');
+            const commentsContent = formatted.length === 0 ? 'No comments.' : formatted;
+            fs.writeFileSync('issue_comments.txt', commentsContent, 'utf8');
 
       - name: Run AI inference with prompt file
         id: ai
