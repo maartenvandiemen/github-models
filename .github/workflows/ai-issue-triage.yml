@@ -36,7 +36,7 @@ jobs:
             const fs = require('fs');
 
             // Helper to indent all lines
-            function indentMultiline(text, spaces = 2) {
+            function indentMultiline(text, spaces = 8) {
               const prefix = ' '.repeat(spaces);
               return (text || '')
                 .replace(/\r\n/g, '\n')
