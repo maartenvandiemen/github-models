@@ -27,14 +27,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare inputs
+      - name: Prepare inputs (issue + comments)
         id: prep
-        shell: bash
-        run: |
-          set -euo pipefail
-          title=$(jq -r '.issue.title // ""' "$GITHUB_EVENT_PATH")
-          printf "title=%s\n" "$title" >> "$GITHUB_OUTPUT"
-          jq -r '.issue.body // ""' "$GITHUB_EVENT_PATH" > issue_body.txt
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+      
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue;
+            const issue_number = issue.number;
+      
+            // Title/output
+            core.setOutput('title', issue.title || '');
+      
+            // Issue body file
+            fs.writeFileSync('issue_body.txt', issue.body || '', 'utf8');
+      
+            // Fetch all comments (paginate) and exclude bots to avoid loops/noise
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 }
+            );
+      
+            const formatted = comments
+              .filter(c => c.user?.type !== 'Bot' && c.user?.login !== 'github-actions[bot]')
+              .map(c => `----\n@${c.user.login} (${c.created_at})\n\n${c.body ?? ''}`)
+              .join('\n');
+      
+            fs.writeFileSync('issue_comments.txt', formatted, 'utf8');
 
       - name: Run AI inference with prompt file
         id: ai
@@ -46,6 +68,7 @@ jobs:
             title: ${{ steps.prep.outputs.title }}
           file_input: |
             body: issue_body.txt
+            comments: issue_comments.txt
           max-tokens: 1000
 
       - name: Apply triage outcome (labels + comment)
