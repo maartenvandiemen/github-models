@@ -7,17 +7,17 @@ messages:
   - role: user
     content: |
       Evaluate whether this issue is actionable for a developer without asking for more details.
-
+      
       Expect at least the following information to be available in the item:
       - Name of the environment where the issue occurs
       - Expected vs. actual behavior
       
       Issue Title:
       {{title}}
-
+      
       Issue Body:
       {{body}}
-
+      
       Issue Comments:
       {{comments}}
 responseFormat: json_schema
