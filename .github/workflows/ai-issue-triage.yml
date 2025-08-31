@@ -3,6 +3,8 @@ name: AI Issue Triage
 on:
   issues:
     types: [opened, edited]
+  issue_comment:
+    types: [created, edited]
 
 permissions:
   contents: read
