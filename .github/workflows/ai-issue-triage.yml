@@ -39,6 +39,8 @@ jobs:
             function indentMultiline(text, spaces = 2) {
               const prefix = ' '.repeat(spaces);
               return (text || '')
+                .replace(/\r\n/g, '\n')
+                .replace(/\r/g, '\n')
                 .split('\n')
                 .map(line => prefix + line)
                 .join('\n');
