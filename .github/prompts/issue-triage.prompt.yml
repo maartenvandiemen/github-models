@@ -8,7 +8,9 @@ messages:
     content: |
       Evaluate whether this issue is actionable for a developer without asking for more details.
 
-      Consider missing: reproduction steps, expected vs actual, environment where the issue occurs.
+      Expect at least the following information to be available in the item:
+      - Name of the environment where the issue occurs
+      - Expected vs. actual behavior
       
       Issue Title:
       {{title}}
