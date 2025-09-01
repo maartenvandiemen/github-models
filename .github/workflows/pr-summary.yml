@@ -90,5 +90,76 @@ jobs:
             diff: pr.diff
             additional_context: additional_context.txt
 
-      - name: Print
-        run: "{{ steps.ai_judge.outputs.response }}"
+      - name: Parse judge decision
+        id: judge_result
+        uses: actions/github-script@v7
+        env:
+          RESPONSE_INLINE: ${{ steps.ai_judge.outputs.response }}
+        with:
+          script: |
+            const inline = process.env.RESPONSE_INLINE ?? '';
+      
+            if (!inline.trim()) {
+              core.warning('Model inline response is empty.');
+              core.setOutput('decision', '');
+              core.setOutput('rationale', '');
+              return;
+            }
+      
+            let obj = null;
+            try { obj = JSON.parse(inline); } catch {}
+            
+            if (!obj) {
+              core.warning('Failed to parse inline model response as JSON.');
+              core.setOutput('decision', '');
+              core.setOutput('rationale', '');
+              return;
+            }
+      
+            const valid = new Set(['fit', 'not_fit']);
+            const decision = typeof obj.decision === 'string' && valid.has(obj.decision) ? obj.decision : '';
+            const rationale = typeof obj.rationale === 'string' ? obj.rationale : '';
+      
+            if (!decision) {
+              core.warning(`Invalid or missing "decision" in model response. Expected one of: ${[...valid].join(', ')}.`);
+            }
+      
+            core.setOutput('decision', decision);
+            core.setOutput('rationale', rationale);
+
+      - name: Generate improved summary (only if not fit)
+        id: ai_summary
+        if: steps.judge_result.outputs.decision == 'not_fit'
+        uses: actions/ai-inference@v1
+        with:
+          model: openai/gpt-4o
+          prompt-file: .github/prompts/generate-summary.prompt.yml
+          input: |
+            title: ${{ steps.pr_info.outputs.title }}
+          file_input: |
+            diff: pr.diff
+            additional_context: additional_context.txt
+
+      - name: Comment result on PR
+        if: steps.judge_result.outputs.decision == 'not_fit'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              'AI review result: the original PR summary did not fit the changes.',
+              '',
+              '**Why:**',
+              '```',
+              `${{ steps.judge_result.outputs.rationale }}`,
+              '```',
+              '',
+              '**Suggested summary:**',
+              '',
+              `${{ steps.ai_summary.outputs.response }}`
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body
+            });
