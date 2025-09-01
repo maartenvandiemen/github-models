@@ -27,6 +27,17 @@ jobs:
             const repo = context.repo.repo;
             const pull_number = context.payload.pull_request.number;
 
+            // Helper to indent all lines
+            function indentMultiline(text, spaces = 8) {
+              const prefix = ' '.repeat(spaces);
+              return (text || '')
+                .replace(/\r\n/g, '\n')
+                .replace(/\r/g, '\n')
+                .split('\n')
+                .map(line => prefix + line)
+                .join('\n');
+            }
+
             // PR metadata
             const pr = await github.rest.pulls.get({ owner, repo, pull_number });
 
@@ -35,7 +46,7 @@ jobs:
               owner, repo, pull_number,
               mediaType: { format: "diff" }
             });
-            fs.writeFileSync('pr.diff', diffResp.data, 'utf8');
+            fs.writeFileSync('pr.diff', indentMultiline(diffResp.data), 'utf8');
 
             // Labels
             const labels = (pr.data.labels || []).map(l => l.name);
@@ -48,14 +59,6 @@ jobs:
             const commits = await github.paginate(github.rest.pulls.listCommits, { owner, repo, pull_number });
             const commitSubjects = commits.map(c => `- ${c.commit.message.split('\n')[0]}`);
 
-            // Optional: include a repo-provided context file if present
-            let repoContext = '';
-            try {
-              repoContext = fs.readFileSync('.github/ai-additional-context.txt', 'utf8');
-            } catch (_) {
-              // ignore if not present
-            }
-
             const additionalContext = [
               `PR #${pull_number}: ${pr.data.title}`,
               labels.length ? `Labels: ${labels.join(', ')}` : 'Labels: (none)',
@@ -65,12 +68,9 @@ jobs:
               '',
               'Commit subjects:',
               ...commitSubjects.slice(0, 200),
-              '',
-              repoContext ? 'Repository-provided context:' : '',
-              repoContext
-            ].join('\n');
+              ''].join('\n');
 
-            fs.writeFileSync('additional_context.txt', additionalContext, 'utf8');
+            fs.writeFileSync('additional_context.txt', indentMultiline(additionalContext), 'utf8');
 
             core.setOutput('summary', pr.data.body || '');
             core.setOutput('title', pr.data.title || '');
