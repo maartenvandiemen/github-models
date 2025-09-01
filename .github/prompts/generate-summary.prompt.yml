@@ -1,0 +1,27 @@
+messages:
+  - role: system
+    content: >
+      You are a senior maintainer. Produce a concise, changelog-quality PR
+      description for reviewers and release notes. Do not ask for more input;
+      all required inputs are provided below.
+  - role: user
+    content: |-
+      Write a clear PR description based on the diff and context.
+
+      If helpful, incorporate the PR title:
+      {{title}}
+
+      Additional Context:
+      {{additional_context}}
+
+      Diff:
+      {{diff}}
+
+      Requirements:
+      - Start with a 1–2 sentence overview.
+      - Bullet key changes grouped by area/file.
+      - Note breaking changes or migrations.
+      - Reference related issues if present (e.g., "Closes #123").
+      - Plain text, ~200 words max.
+model: openai/gpt-4o
+responseFormat: text
