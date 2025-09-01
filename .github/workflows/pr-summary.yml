@@ -143,20 +143,27 @@ jobs:
       - name: Comment result on PR
         if: steps.judge_result.outputs.decision == 'not_fit'
         uses: actions/github-script@v7
+        env:
+          RATIONALE: ${{ steps.judge_result.outputs.rationale }}
+          SUMMARY: ${{ steps.ai_summary.outputs.response }}
         with:
           script: |
+            const rationale = process.env.RATIONALE ?? '';
+            const summary = process.env.SUMMARY ?? '';
+
             const body = [
               'AI review result: the original PR summary did not fit the changes.',
               '',
               '**Why:**',
               '```',
-              `${{ steps.judge_result.outputs.rationale }}`,
+              rationale,
               '```',
               '',
               '**Suggested summary:**',
               '',
-              `${{ steps.ai_summary.outputs.response }}`
+              summary
             ].join('\n');
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
