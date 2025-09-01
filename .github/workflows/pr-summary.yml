@@ -13,65 +13,82 @@ jobs:
   judge-summary:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Get PR summary and diff
+      - name: Collect PR data (summary, title, labels, files, commits) and write diff/context files
         id: pr_info
         uses: actions/github-script@v7
         with:
           script: |
-            const pr = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
-            });
-            const diff = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
+            const fs = require('fs');
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pull_number = context.payload.pull_request.number;
+
+            // PR metadata
+            const pr = await github.rest.pulls.get({ owner, repo, pull_number });
+
+            // Diff (as a file)
+            const diffResp = await github.rest.pulls.get({
+              owner, repo, pull_number,
               mediaType: { format: "diff" }
             });
-            return {
-              summary: pr.data.body || "",
-              diff: diff.data
-            };
+            fs.writeFileSync('pr.diff', diffResp.data, 'utf8');
 
-      - name: Judge PR summary using AI
+            // Labels
+            const labels = (pr.data.labels || []).map(l => l.name);
+
+            // Files changed (summarized)
+            const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number });
+            const filePaths = files.map(f => `${f.status.padEnd(8)} ${f.filename}`);
+
+            // Commits (subjects only)
+            const commits = await github.paginate(github.rest.pulls.listCommits, { owner, repo, pull_number });
+            const commitSubjects = commits.map(c => `- ${c.commit.message.split('\n')[0]}`);
+
+            // Optional: include a repo-provided context file if present
+            let repoContext = '';
+            try {
+              repoContext = fs.readFileSync('.github/ai-additional-context.txt', 'utf8');
+            } catch (_) {
+              // ignore if not present
+            }
+
+            const additionalContext = [
+              `PR #${pull_number}: ${pr.data.title}`,
+              labels.length ? `Labels: ${labels.join(', ')}` : 'Labels: (none)',
+              '',
+              'Changed files:',
+              ...filePaths.slice(0, 200), // safeguard for very large PRs
+              '',
+              'Commit subjects:',
+              ...commitSubjects.slice(0, 200),
+              '',
+              repoContext ? 'Repository-provided context:' : '',
+              repoContext
+            ].join('\n');
+
+            fs.writeFileSync('additional_context.txt', additionalContext, 'utf8');
+
+            core.setOutput('summary', pr.data.body || '');
+            core.setOutput('title', pr.data.title || '');
+            core.setOutput('labels', labels.join(', '));
+
+      - name: Judge PR summary with AI (structured response)
         id: ai_judge
         uses: actions/ai-inference@v1
         with:
-          task: "text-classification"
-          inputs: |
-            [
-              {
-                "summary": "${{ steps.pr_info.outputs.summary }}",
-                "diff": "${{ steps.pr_info.outputs.diff }}"
-              }
-            ]
           model: openai/gpt-4o
-          prompt: |
-            You are an AI reviewer. Given the PR summary and the diff, judge whether the summary accurately reflects the changes. Respond "fit" if it fits, otherwise respond "not fit".
+          prompt: 'You are an AI reviewer. Given the PR summary, the diff, and any additional information provided, judge whether the summary accurately reflects the changes. Respond "fit" if it fits, otherwise respond "not fit". Use the additional information to help inform your judgment.'
+          input: |
+            title: ${{ steps.pr_info.outputs.title }}
+            summary: ${{ steps.pr_info.outputs.summary }}
+            labels: ${{ steps.pr_info.outputs.labels }}
+          file_input: |
+            diff: pr.diff
+            additional_context: additional_context.txt
 
-      - name: Generate new summary if needed
-        if: steps.ai_judge.outputs.result == 'not fit'
-        uses: actions/ai-inference@v1
-        id: ai_summary
-        with:
-          task: "text-generation"
-          inputs: "${{ steps.pr_info.outputs.diff }}"
-          model: openai/gpt-4o
-          prompt: |
-            You are an AI reviewer. Based on the following PR diff, generate a clear and concise summary describing the changes for the PR description.
-
-      - name: Comment summary on PR
-        if: steps.ai_judge.outputs.result == 'not fit'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body: `AI-generated summary (original did not fit the changes):\n\n${{ steps.ai_summary.outputs.result }}`
-            });
+      - name: Print
+        run: "{{ steps.ai_judge.outputs.response }}"
