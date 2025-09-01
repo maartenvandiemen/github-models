@@ -1,0 +1,45 @@
+messages:
+  - role: system
+    content: >
+      You are an AI PR reviewer. Decide if a PR's summary accurately reflects
+      the code changes given. Do not ask for more input; all required inputs are
+      provided below. Respond ONLY using the specified JSON schema.
+  - role: user
+    content: |-
+      PR Title:
+      {{title}}
+
+      PR Summary:
+      {{summary}}
+
+      Labels:
+      {{labels}}
+
+      Additional Context:
+      {{additional_context}}
+
+      Diff:
+      {{diff}}
+model: openai/gpt-4o
+responseFormat: json_schema
+jsonSchema: |-
+  {
+    "name": "pr_summary_fit_decision",
+    "strict": true,
+    "schema": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": ["fit", "not_fit"],
+          "description": "Whether the PR summary fits the provided changes."
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Brief justification referencing specific evidence from the diff/context."
+        }
+      },
+      "required": ["decision", "rationale"],
+      "additionalProperties": false
+    }
+  }
