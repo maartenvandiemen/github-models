@@ -81,7 +81,7 @@ jobs:
         uses: actions/ai-inference@v1
         with:
           model: openai/gpt-4o
-          prompt: 'You are an AI reviewer. Given the PR summary, the diff, and any additional information provided, judge whether the summary accurately reflects the changes. Respond "fit" if it fits, otherwise respond "not fit". Use the additional information to help inform your judgment.'
+          prompt-file: .github/prompts/judge-summary.prompt.yml
           input: |
             title: ${{ steps.pr_info.outputs.title }}
             summary: ${{ steps.pr_info.outputs.summary }}
