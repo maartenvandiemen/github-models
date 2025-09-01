@@ -44,7 +44,7 @@ jobs:
                 "diff": "${{ steps.pr_info.outputs.diff }}"
               }
             ]
-          model: "gpt-4"
+          model: openai/gpt-4o
           prompt: |
             You are an AI reviewer. Given the PR summary and the diff, judge whether the summary accurately reflects the changes. Respond "fit" if it fits, otherwise respond "not fit".
 
@@ -55,7 +55,7 @@ jobs:
         with:
           task: "text-generation"
           inputs: "${{ steps.pr_info.outputs.diff }}"
-          model: "gpt-4"
+          model: openai/gpt-4o
           prompt: |
             You are an AI reviewer. Based on the following PR diff, generate a clear and concise summary describing the changes for the PR description.
 
