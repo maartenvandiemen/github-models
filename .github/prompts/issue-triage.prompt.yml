@@ -1,26 +1,41 @@
 messages:
   - role: system
-    content: |
-      You are a senior triage engineer. Evaluate GitHub issues for actionability.
-      Always return ONLY JSON that matches the provided schema. No code fences or extra text.
-      Return a single-line, minified JSON object with no surrounding Markdown fences or prose.
+    content: >
+      You are a senior triage engineer. Evaluate GitHub issues for
+      actionability.
+
+      Always return ONLY JSON that matches the provided schema. No code fences
+      or extra text.
+
+      Return a single-line, minified JSON object with no surrounding Markdown
+      fences or prose.
   - role: user
-    content: |
-      Evaluate whether this issue is actionable for a developer without asking for more details.
-      
+    content: >
+      Evaluate whether this issue is actionable for a developer without asking
+      for more details.
+
+
       Expect at least the following information to be available in the item:
+
       - Name of the environment where the issue occurs
+
       - Expected vs. actual behavior
-      
+
+
       Issue Title:
+
       {{title}}
-      
+
+
       Issue Body:
+
       {{body}}
-      
+
+
       Issue Comments:
+
       {{comments}}
-responseFormat: json_schema
+responseFormat: json_object
 jsonSchema: |-
   {
     "name": "response",
@@ -52,3 +67,4 @@ jsonSchema: |-
       "additionalProperties": false
     }
   }
+model: openai/gpt-4.1-nano
