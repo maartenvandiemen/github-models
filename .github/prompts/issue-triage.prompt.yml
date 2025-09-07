@@ -18,7 +18,7 @@ messages:
       - Expected vs. actual behavior
 
 
-      Mark the issue as actionable if there's nothing missing
+      Actionable is true if there's nothing missing, else false
 
 
       Comply to the following json schema:
@@ -77,3 +77,12 @@ messages:
 model: openai/gpt-4.1-nano
 modelParameters:
   max_completion_tokens: 13107
+testData:
+  - title: Bug in shopping cart
+    body: >-
+      When I add cheese on the development environment i get an internal server
+      error which I wasn't expecting. The error page shows a correlationid:
+      1234-5432-2232
+evaluators:
+  - name: Relevance
+    uses: github/relevance
