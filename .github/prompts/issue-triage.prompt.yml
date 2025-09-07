@@ -74,38 +74,6 @@ messages:
       Issue Comments:
 
       {{comments}}
-responseFormat: json_object
-jsonSchema: |-
-  {
-    "name": "response",
-    "strict": true,
-    "schema": {
-      "type": "object",
-      "properties": {
-        "actionable": { "type": "boolean" },
-        "summary": { "type": "string" },
-        "missing": {
-          "type": "array",
-          "items": { "type": "string" }
-        },
-        "questions": {
-          "type": "array",
-          "items": { "type": "string" }
-        },
-        "labels": {
-          "type": "array",
-          "items": { "type": "string" }
-        },
-        "confidence": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        }
-      },
-      "required": ["actionable", "summary", "missing", "questions", "labels", "confidence"],
-      "additionalProperties": false
-    }
-  }
 model: openai/gpt-4.1-nano
 modelParameters:
   max_completion_tokens: 13107
