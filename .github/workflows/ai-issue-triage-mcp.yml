@@ -12,7 +12,6 @@ permissions:
   models: read
 
 env:
-  MODEL: openai/gpt-4o-mini
   READY_LABEL: ready-for-dev
   TRIAGED_LABEL: triaged
   NEEDS_INFO_LABEL: needs-more-info
@@ -33,7 +32,6 @@ jobs:
         id: ai
         uses: actions/ai-inference@v1
         with:
-          model: ${{ env.MODEL }}
           prompt-file: .github/prompts/issue-triage-mcp.prompt.yml
           input: |
             owner: ${{ github.repository_owner }}
