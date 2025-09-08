@@ -10,9 +10,9 @@ messages:
       Return a single-line, minified JSON object with no surrounding Markdown
       fences or prose.
 
-      Expect at least the following information to be available in the item:
-      - Name of the environment where the issue occurs
-      - Expected vs. actual behavior
+      Expect at least the following information to be available in the item: -
+      Name of the environment where the issue occurs - Expected vs. actual
+      behavior
 
       Actionable is true if there's nothing missing, else false
 
@@ -55,8 +55,7 @@ messages:
       Evaluate whether this issue is actionable for a developer without asking
       for more details.
 
-      For the issue use GitHub MCP for retrieving information
-      - get_issue:
+      For the issue use GitHub MCP for retrieving information - get_issue:
         - issue_number: {{issue_number}}
         - owner: {{owner}}
         - repo: {{repo}}
@@ -64,7 +63,7 @@ messages:
         - issue_number: {{issue_number}}
         - owner: {{owner}}
         - repo: {{repo}}
-model: openai/gpt-4.1-nano
+model: openai/gpt-4.1
 modelParameters:
   max_completion_tokens: 13107
 testData:
