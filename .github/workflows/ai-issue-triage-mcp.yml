@@ -27,7 +27,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
+      - name: Set repo name output
+        id: get-repo-name
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.setOutput('repo_name', context.repo.repo);
       - name: Run AI inference with prompt file
         id: ai
         uses: actions/ai-inference@v1
@@ -35,7 +40,7 @@ jobs:
           prompt-file: .github/prompts/issue-triage-mcp.prompt.yml
           input: |
             owner: ${{ github.repository_owner }}
-            repo: ${{ github.repository }}
+            repo: ${{ steps.get-repo-name.outputs.repo_name }}
             issue_number: ${{ github.event.issue.number }}
           max-tokens: 1000
           enable-github-mcp: true
