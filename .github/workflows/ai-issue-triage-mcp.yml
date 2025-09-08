@@ -40,6 +40,8 @@ jobs:
             repo: ${{ github.repository }}
             issue_number: ${{ github.event.issue.number }}
           max-tokens: 1000
+          enable-github-mcp: true
+          token: ${{ secrets.AUTO_REMEDIATION_PAT }}
 
       - name: Apply triage outcome (labels + comment)
         if: success()
