@@ -1,0 +1,31 @@
+name: AI Issue Triage MCP
+
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+  issues: write
+  models: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run AI assessment
+        id: ai-assessment
+        uses: github/ai-assessment-comment-labeler@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue_number: ${{ github.event.issue.number }}
+          issue_body: ${{ github.event.issue.body }}
+          repo_name: ${{ github.event.repository.name }}
+          owner: ${{ github.repository_owner }}
+          ai_review_label: 'request ai review'
+          prompts_directory: './prompts'
+          labels_to_prompts_mapping: 'bug,issue-triage.prompt.yml'
