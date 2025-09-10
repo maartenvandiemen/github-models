@@ -1,4 +1,4 @@
-name: AI Issue Triage MCP
+name: AI Issue Triage Action
 
 on:
   issues:
